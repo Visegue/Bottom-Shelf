@@ -1,0 +1,20 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      next-react:
+        patterns: [next, react, react-dom, "@types/react*"]
+      neon:
+        patterns: ["@neondatabase/*", "@neon/*"]
+      aws-sdk:
+        patterns: ["@aws-sdk/*"]
+      development:
+        dependency-type: development
+        exclude-patterns: ["@types/react*"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

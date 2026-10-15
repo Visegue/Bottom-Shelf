@@ -1,0 +1,12 @@
+node_modules/
+.next/
+out/
+.env*
+!.env.example
+.vercel/
+.neon
+playwright-report/
+test-results/
+*.tsbuildinfo
+*.auth-state.json
+.vercel

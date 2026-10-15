@@ -1,0 +1,51 @@
+{
+  "name": "bottom-shelf",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "playwright test",
+    "test:live": "playwright test --config playwright.live.config.ts",
+    "db:migrate": "node --env-file-if-exists=.env.local scripts/migrate.mjs",
+    "verify": "npm run check && npm test",
+    "test:services": "playwright test --config playwright.services.config.ts",
+    "lint": "oxlint --deny-warnings .",
+    "lint:fix": "oxlint --fix .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "build:check": "node scripts/build-check.mjs",
+    "test:scripts": "node --test tests/scripts/*.test.mjs",
+    "db:check": "node --env-file-if-exists=.env.local scripts/check-database.mjs",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm run test:scripts && npm run build:check",
+    "deploy:smoke": "node scripts/smoke-deployment.mjs",
+    "deploy:test": "node --env-file-if-exists=.env.local scripts/deploy-test.mjs",
+    "db:provision": "node --env-file-if-exists=.env.local scripts/provision-runtime.mjs",
+    "env:push:test": "node --env-file=.env.local scripts/push-test-env.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "3.1149.0",
+    "@neon/config": "1.8.6",
+    "@neondatabase/auth": "0.6.0-beta",
+    "@neondatabase/serverless": "1.2.0",
+    "next": "16.4.0",
+    "pg": "8.23.1",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "server-only": "0.0.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.0",
+    "@types/node": "24.19.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "oxlint": "1.88.0",
+    "prettier": "3.9.10",
+    "typescript": "5.9.3"
+  }
+}

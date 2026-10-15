@@ -1,0 +1,12 @@
+.next
+node_modules
+.vercel
+coverage
+playwright-report
+test-results
+package-lock.json
+next-env.d.ts
+AGENTS.md
+GLOSSARY.md
+docs/agents
+*.auth-state.json
