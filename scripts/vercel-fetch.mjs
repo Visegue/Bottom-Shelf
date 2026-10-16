@@ -16,8 +16,6 @@ export async function vercelFetch(input, init = {}) {
     url.pathname + url.search,
     "--deployment",
     url.origin,
-    "--scope",
-    process.env.VERCEL_SCOPE ?? "visegue",
     "--",
     "--silent",
     "--show-error",
