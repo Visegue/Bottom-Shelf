@@ -1,0 +1,3 @@
+# User-facing versions with Conventional Commits
+
+Bottom Shelf uses Conventional Commits linked to Semantic Versioning for its user-facing application version: fixes correspond to patch, compatible features to minor, and breaking changes to the promised product contract to major. The public contract covers user workflows and promised data exchange behaviour rather than internal database or infrastructure interfaces, so major denotes a product-level transition and the size of an internal refactor does not determine the user-facing version. Migration identifiers and deployment commits retain separate technical traceability, and no release marker relaxes the requirement to keep active deployments and the designated rollback release compatible.
