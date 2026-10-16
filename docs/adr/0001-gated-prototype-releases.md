@@ -1,0 +1,9 @@
+# Gated automatic releases for the prototype
+
+Bottom Shelf's `main` branch must remain releasable: merging to it triggers automatic production migration and deployment after the required quality and migration checks have passed. Migration checks must run in CI against a non-production database before production changes are applied, so successful runs from a developer's computer are insufficient release evidence. As agreed during the design discussion for issue #14, the prototype does not currently require an SLA or a scheduled backup-rotation programme.
+
+Every schema and data transition must remain compatible with running application versions. Changes that would otherwise be incompatible must be split into compatible releases: expand, migrate/backfill, switch application usage, and remove old structures only after no supported running deployment depends on them. A successful migration alone is insufficient release evidence; CI must check compatibility with the running application, and the release must never rely on updating the database and application at exactly the same instant.
+
+The compatibility boundary includes current production, the preceding production release retained for rollback, and every active preview. Before removing a structure on which an older deployment depends, update or retire that deployment and establish a compatible rollback release. Application rollback does not imply reversing an applied database migration.
+
+The application's public version describes user-facing product compatibility rather than the versions of underlying technical components. Database migration identifiers and deployment commit identifiers provide separate technical traceability; a public major-version increase never permits breaking an active deployment or its data compatibility.
