@@ -8,6 +8,10 @@ import {
   DeleteObjectCommand,
   HeadObjectCommand,
 } from "@aws-sdk/client-s3";
+import {
+  assertDatabaseIdentity,
+  verifyStorageTarget,
+} from "../../scripts/environment-target.mjs";
 import { AppError, requireEnv } from "./config";
 
 // An app-owned 1×1 PNG fixture; no uploads or arbitrary object keys are accepted.
@@ -18,19 +22,25 @@ const image = Buffer.from(
 
 export async function checkFoundation(ownerId: string) {
   if (
-    process.env.APP_ENV !== "test" ||
+    !["test", "development"].includes(process.env.APP_ENV ?? "") ||
     process.env.FOUNDATION_CHECK_ENABLED !== "true"
   ) {
     throw new AppError("configuration", 503);
   }
   const sql = neon(requireEnv("DATABASE_URL"));
-  const endpoint = requireEnv("AWS_ENDPOINT_URL_S3");
-  const bucket = requireEnv("STORAGE_BUCKET");
-  if (requireEnv("AWS_REGION") !== "eu-central-1")
+  const [identity] =
+    await sql`SELECT current_setting('neon.project_id', true) AS project_id, current_setting('neon.branch_id', true) AS branch_id, current_database() AS database, current_user AS role`;
+  let target;
+  try {
+    assertDatabaseIdentity(identity);
+    target = verifyStorageTarget();
+  } catch {
     throw new AppError("configuration", 503);
+  }
+  const { storageEndpoint: endpoint, bucket, region } = target;
   const s3 = new S3Client({
     endpoint,
-    region: "eu-central-1",
+    region,
     forcePathStyle: true,
     credentials: {
       accessKeyId: requireEnv("AWS_ACCESS_KEY_ID"),
