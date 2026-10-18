@@ -62,3 +62,7 @@ node --env-file=.env.development.local scripts/seed-development.mjs --check
 - A parent storage key can access a descendant bucket at the provider level. The development app, bootstrap and storage command reject that key by its pinned identifier before writing. Development's own key cannot access the parent. Parent/operator credentials remain higher trust; the application guard does not revoke their provider-level access. Future branches must provision their own roles/keys and registry identities, rather than copying `.env` files.
 
 The existing test branch, deployed test credentials and OAuth settings were not modified. No paid capacity upgrade was made. The existing CI deployment repair from PR #13 is included in this delivery so main can deploy with its scoped token. Preview/production pipelines in #17–19 remain separate work.
+
+## Published delivery
+
+[PR #25](https://github.com/Visegue/Bottom-Shelf/pull/25) merged as `f847c93d68d4175b3352ecd6432586d6c369f594`. [Main CI 39120889007](https://github.com/Visegue/Bottom-Shelf/actions/runs/39120889007) passed quality, browser tests and the complete existing-test deployment/promotion. Real Google login and the connection check also passed on the deployed test app afterward. The local saved reference remains separate from this deployed test database.
