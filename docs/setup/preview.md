@@ -6,6 +6,8 @@ The implementation on `codex/feat/17-trusted-preview` is based on main `9c6c1757
 
 `.github/workflows/preview.yml` is explicitly dispatched from current protected main with an open, reviewed same-repository PR number and its full approved head SHA. It rechecks the PR immediately before provisioning and deployment; a moved head or main stops the operation. Fork and bot PRs are refused. The approved **head commit**, rather than a moving merge ref, is tested and uploaded byte-for-byte. The existing main deployment repair from #13 is already present in this baseline; #13 remains closed.
 
+PR installation, scripts, builds and migrations execute inside a digest-pinned Playwright/Node 24 container. Only candidate/baseline source and a read-only trusted executor are mounted; runner home/temp directories, host PID namespace, GitHub runtime/cache credentials and the Docker socket are excluded. Quality receives no private input; migrations receive only scoped `PREVIEW_INPUT`. This blocks PR code from obtaining main-context cache credentials during manual dispatch. Initial published CodeQL found three high-severity cache-poisoning paths when quality steps executed directly on the host; neither removing setup-node caching nor read-only repository permissions alone addressed that boundary.
+
 Only pinned main code and its lockfile run in the `preview-control` environment. Quality and migration jobs use separate GitHub-hosted runners. The migration runner receives only this preview's scoped SQL/S3 credentials, stable nonproduction Auth configuration and saved reference. Vercel installs/builds the approved source remotely with runtime credentials only. Trusted deployment uploads source bytes through the API; it does not execute that source. No management key is put in a PR checkout's installation, migration or build environment. Execution logs are withheld because PR code can print private credentials/reference data.
 
 The non-git Vercel create-deployment API's documented default target is Preview; no `production`, `staging`, production alias or Git branch inference is used. The response is checked for the Preview target and the pinned project. Inherited project Preview variables are refused; configure none there. The deployment receives a complete per-deployment runtime/build environment instead. Existing Production/test configuration is preserved.
@@ -34,7 +36,7 @@ A new preview is a child of stable nonproduction test, **never development or pr
 
 The repository Actions variable (written only by trusted orchestration) `BS_PREVIEW_<PR>` stores an AES-256-GCM encrypted registry (authenticated to its variable name): generation token, actual resource IDs, SQL passwords, branch-scoped storage key/secret, deployment IDs/addresses and code identity. Treat the state key and encrypted registry together as recovery material. Registration precedes resource creation; an uncertain create is recovered by the unique recorded name, not by adopting an arbitrary existing branch. Never manually edit ciphertext or copy credentials between previews.
 
-Before migrating a reused preview, old registered deployments are deleted and their direct addresses must return 404/410; Auth origins are removed. Resources are not reused while retirement is incomplete. The execution job then:
+Reuse first rejects any descendant branches, before retiring URLs, changing data or releasing credentials. Before migrating a reused preview, old registered deployments are deleted and their direct addresses must return 404/410; Auth origins are removed. Resources are not reused while retirement is incomplete. The execution job then:
 
 1. Initializes a new persistent database from the previous app schema and saved reference; it does not reset an existing database.
 2. Boots candidate migrations into empty `bs_probe`, checks complete checksummed history and imports the saved reference.
@@ -72,7 +74,7 @@ The concrete HTTP/SQL adapters and workflow wiring were added after these policy
 
 Review found that runtime could not read the newly validated migration history. A read-only real development reference check reproduced PostgreSQL `42501` before the fix. A narrow `SELECT` grant was then added to the scoped nonproduction runtime; the same check passed, and the real runtime permission command verified that migration writes/schema creation remain denied. No inventory rows, saved images, credentials, stable Auth or production settings were reset. This additive permission change was applied to the existing development database only.
 
-Local results: 40 script tests passed; 22 browser tests passed using an ignored temporary configuration on port 3017 because another session owns port 3000; 2 service browser tests passed against existing real development PostgreSQL/private S3 with fixture Auth. `actionlint` 1.7.12 accepted the new workflow. The final `npm run check` passed after the review fixes: formatting, lint, typecheck, all 40 script tests and production build. These service tests are development evidence, not per-preview CI or real Google-login evidence.
+Initial local results: 40 script tests passed; 22 browser tests passed using an ignored temporary configuration on port 3017 because another session owns port 3000; 2 service browser tests passed against existing real development PostgreSQL/private S3 with fixture Auth. `actionlint` 1.7.12 accepted the workflow. The initial `npm run check` passed after the first review fixes: formatting, lint, typecheck, all 40 script tests and production build. These service tests are development evidence, not per-preview CI or real Google-login evidence.
 
 ### Standards
 
@@ -95,3 +97,12 @@ Remaining acceptance requires protected-secret setup, trusted-main workflow avai
 - [Vercel limits](https://vercel.com/docs/limits)
 - [Vercel official client deployment types](https://github.com/vercel/vercel/blob/main/packages/client/src/types.ts), including separate runtime/build environment payloads
 - [GitHub secure workflow guidance](https://docs.github.com/en/actions/reference/security/secure-use)
+
+- [GitHub cache-poisoning rule](https://codeql.github.com/codeql-query-help/actions/actions-cache-poisoning-poisonable-step/)
+- [Official pinned Playwright Dockerfile](https://github.com/microsoft/playwright/blob/v1.64.0/utils/docker/Dockerfile.noble)
+
+## Publication review follow-up
+
+The initial PR #28 head `95b1a1b` passed GitHub quality/end-to-end tests, but CodeQL found three high cache-poisoning paths. The independent PR reviewer confirmed that boundary defect and found a missing descendant check on reuse. Both corrections have targeted red/green evidence: `node --test tests/scripts/preview-sandbox.test.mjs` initially exposed the synthetic host cache token; `node --test tests/scripts/preview-lifecycle.test.mjs` initially failed to reject descendants. The fixed tests exclude host credentials and reject reuse before changing data or retiring the current preview. The real-provider preview/Google acceptance remains pending.
+
+After the publication-review corrections, `npm run check` passed again with 42 script tests, formatting, lint, typecheck and production build. Actionlint also passed. Actual CodeQL re-analysis and container-boundary verification are checked before the PR handoff.

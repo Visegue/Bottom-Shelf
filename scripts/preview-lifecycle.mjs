@@ -128,6 +128,8 @@ export async function preparePreview(record, api) {
     await api.save(record);
   }
   verifyPreviewBranch(record, await api.branch(record.branchId));
+  if ((await api.children(record.branchId)).length)
+    throw new PreviewError("Preview has descendants; inspect before reuse");
   await retirePreview(record, api);
   // Passwords are persisted by the trusted bootstrap adapter before CREATE ROLE.
   await api.bootstrap(record);
