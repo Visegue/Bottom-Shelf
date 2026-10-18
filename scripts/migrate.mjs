@@ -52,8 +52,11 @@ try {
       [file.name, file.checksum],
     );
   }
-  if (process.env.APP_ENV === "development") {
+  if (["development", "preview"].includes(process.env.APP_ENV)) {
     await client.query(`GRANT USAGE ON SCHEMA public TO "${target.runtime}"`);
+    await client.query(
+      `GRANT SELECT ON schema_migrations TO "${target.runtime}"`,
+    );
     await client.query(
       `GRANT SELECT, INSERT, DELETE ON foundation_checks TO "${target.runtime}"`,
     );

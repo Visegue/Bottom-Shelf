@@ -25,10 +25,13 @@ try {
     has_table_privilege(current_user, 'foundation_checks', 'SELECT') AS probe_select,
     has_table_privilege(current_user, 'foundation_checks', 'INSERT') AS probe_insert,
     has_table_privilege(current_user, 'foundation_checks', 'DELETE') AS probe_delete,
+    has_table_privilege(current_user, 'schema_migrations', 'SELECT') AS migration_read,
     has_table_privilege(current_user, 'schema_migrations', 'INSERT,UPDATE,DELETE') AS migration_write,
     has_schema_privilege(current_user, 'public', 'CREATE') AS schema_create`;
   for (const permission of ["probe_select", "probe_insert", "probe_delete"])
     assert.equal(permissions[permission], true, permission);
+  if (["development", "preview"].includes(process.env.APP_ENV))
+    assert.equal(permissions.migration_read, true);
   assert.equal(permissions.migration_write, false);
   assert.equal(permissions.schema_create, false);
   console.log(
