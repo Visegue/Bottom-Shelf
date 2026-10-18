@@ -1,0 +1,21 @@
+{
+  "test": {
+    "projectId": "blue-bar-96694914",
+    "branchId": "br-mute-art-baqyyyu3",
+    "database": "neondb",
+    "migrator": "neondb_owner",
+    "runtime": "bottom_shelf_app_runtime",
+    "bucket": "foundation-checks"
+  },
+  "development": {
+    "projectId": "blue-bar-96694914",
+    "branchId": "br-lingering-water-bawa84pd",
+    "database": "bottom_shelf_development",
+    "migrator": "bottom_shelf_dev_migrator",
+    "runtime": "bottom_shelf_dev_runtime",
+    "bucket": "development-images",
+    "bootstrap": "neondb_owner",
+    "bootstrapDatabase": "neondb",
+    "storageKeyId": "nak_live_9694d877575849c2aa3c352ae5826d05"
+  }
+}

@@ -1,14 +1,18 @@
+import { assertDatabaseIdentity } from "./environment-target.mjs";
 import assert from "node:assert/strict";
 import { neon } from "@neondatabase/serverless";
 
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required");
 const sql = neon(process.env.DATABASE_URL);
 try {
+  const [identity] =
+    await sql`SELECT current_setting('neon.project_id', true) AS project_id, current_setting('neon.branch_id', true) AS branch_id, current_database() AS database, current_user AS role`;
+  const target = assertDatabaseIdentity(identity);
   const [role] =
     await sql`SELECT current_user AS name, rolsuper, rolbypassrls, rolcreatedb, rolcreaterole,
     pg_has_role(current_user, 'neon_superuser', 'member') AS neon_admin
     FROM pg_roles WHERE rolname = current_user`;
-  assert.equal(role.name, "bottom_shelf_app_runtime");
+  assert.equal(role.name, target.runtime);
   for (const flag of [
     "rolsuper",
     "rolbypassrls",

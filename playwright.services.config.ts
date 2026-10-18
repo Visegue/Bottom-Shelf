@@ -6,4 +6,15 @@ export default defineConfig({
   testMatch: "services.spec.ts",
   workers: 1,
   timeout: 60000,
+  webServer: (Array.isArray(local.webServer)
+    ? local.webServer
+    : [local.webServer!]
+  ).map((server, index) =>
+    index === 1
+      ? {
+          ...server,
+          env: { ...server.env, APP_ENV: process.env.APP_ENV ?? "test" },
+        }
+      : server,
+  ),
 });

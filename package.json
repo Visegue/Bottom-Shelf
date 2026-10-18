@@ -26,7 +26,11 @@
     "deploy:smoke": "node scripts/smoke-deployment.mjs",
     "deploy:test": "node --env-file-if-exists=.env.local scripts/deploy-test.mjs",
     "db:provision": "node --env-file-if-exists=.env.local scripts/provision-runtime.mjs",
-    "env:push:test": "node --env-file=.env.local scripts/push-test-env.mjs"
+    "env:push:test": "node --env-file=.env.local scripts/push-test-env.mjs",
+    "dev:bootstrap": "node --env-file=.env.bootstrap.local scripts/bootstrap-development.mjs",
+    "dev:migrate": "node --env-file=.env.development.admin.local scripts/migrate.mjs",
+    "dev:check": "node --env-file=.env.development.local scripts/check-database.mjs && node --env-file=.env.development.local scripts/check-storage.mjs",
+    "dev:seed": "node --env-file=.env.development.local scripts/seed-development.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1149.0",

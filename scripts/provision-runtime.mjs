@@ -1,3 +1,4 @@
+import { verifyDatabaseTarget } from "./environment-target.mjs";
 import { Client } from "pg";
 import { randomBytes } from "node:crypto";
 import { readFile, writeFile, rename } from "node:fs/promises";
@@ -16,7 +17,12 @@ try {
 } catch (error) {
   if (error.code !== "ENOENT") throw error;
 }
-const owner = new URL(process.env.DATABASE_MIGRATION_URL);
+let owner;
+try {
+  owner = new URL(process.env.DATABASE_MIGRATION_URL);
+} catch {
+  throw new Error("Invalid migration target configuration");
+}
 if (owner.hostname.includes("-pooler"))
   throw new Error("Use a direct migration connection");
 owner.searchParams.set("sslmode", "verify-full");
@@ -38,13 +44,14 @@ async function verifyLogin(connectionString) {
   });
   try {
     await runtime.connect();
-    await runtime.query("SELECT 1");
+    await verifyDatabaseTarget(runtime, "runtime");
   } finally {
     await runtime.end();
   }
 }
 try {
   await client.connect();
+  await verifyDatabaseTarget(client);
   const { rows } = await client.query(
     "SELECT rolbypassrls,rolcreatedb,rolcreaterole FROM pg_roles WHERE rolname='bottom_shelf_app_runtime'",
   );
@@ -103,7 +110,9 @@ try {
   // verifies a committed role or recreates a rolled-back role with the same key.
   console.error(
     "Provisioning failed; preserve any private pending file:",
-    error.code ?? error.message,
+    error.message?.includes("target")
+      ? error.message
+      : (error.code ?? error.name),
   );
   process.exitCode = 1;
 } finally {
