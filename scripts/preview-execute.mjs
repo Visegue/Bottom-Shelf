@@ -55,10 +55,14 @@ try {
     [candidate, input.sha],
     [baseline, input.previousSha],
   ]) {
-    const actual = spawnSync("git", ["rev-parse", "HEAD"], {
-      cwd,
-      encoding: "utf8",
-    });
+    const actual = spawnSync(
+      "git",
+      ["-c", `safe.directory=${cwd}`, "rev-parse", "HEAD"],
+      {
+        cwd,
+        encoding: "utf8",
+      },
+    );
     if (actual.status !== 0 || actual.stdout.trim() !== sha)
       throw new Error("Execution revision differs");
     run(cwd, "npm", ["ci"]);

@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cleanupPreview } from "../../scripts/preview-lifecycle.mjs";
+import {
+  cleanupPreview,
+  preparePreview,
+} from "../../scripts/preview-lifecycle.mjs";
 const record = () => ({
   pr: 17,
   token: "0123456789abcdef",
@@ -117,6 +120,9 @@ test("provisioning records a fresh isolated branch and preserves it on repeat de
         vercelActive: 0,
       };
     },
+    async children() {
+      return [];
+    },
     async findBranch(name) {
       return branches.find((branch) => branch.name === name);
     },
@@ -191,5 +197,26 @@ test("cleanup recovers a branch created before its response was saved", async ()
     api.exists,
     false,
     "registered creation intent must permit orphan recovery",
+  );
+});
+
+test("preview reuse refuses descendants before retiring addresses or changing data", async () => {
+  const api = provider();
+  let changed = false;
+  api.children = async () => [{ id: "br-descendant" }];
+  api.bootstrap = async () => {
+    changed = true;
+  };
+  const state = {
+    ...record(),
+    storageKeyId: "nak_live_fixture",
+    storageSecret: "scoped-secret",
+  };
+  await assert.rejects(preparePreview(state, api), /descendants/);
+  assert.equal(changed, false);
+  assert.equal(
+    api.live,
+    true,
+    "blocked reuse must preserve the current preview",
   );
 });
