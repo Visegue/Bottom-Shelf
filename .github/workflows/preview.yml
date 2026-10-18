@@ -1,0 +1,194 @@
+name: Requested isolated preview
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        type: choice
+        options: [deploy, cleanup]
+        required: true
+      pr:
+        description: Trusted same-repository PR number
+        type: string
+        required: true
+      sha:
+        description: Exact approved full PR head SHA (required for deploy)
+        type: string
+        required: false
+permissions:
+  contents: read
+  pull-requests: read
+# One trusted operation at a time also makes the free-capacity check atomic
+# against all other requested previews. Never cancel a resource mutation.
+concurrency:
+  group: bottom-shelf-preview-control
+  cancel-in-progress: false
+jobs:
+  approve:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.approve.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version-file: .node-version
+      - run: npm ci --ignore-scripts
+      - id: approve
+        run: node scripts/preview-control.mjs approve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIEW_ACTION: ${{ inputs.action }}
+          PREVIEW_PR: ${{ inputs.pr }}
+          PREVIEW_SHA: ${{ inputs.sha }}
+  quality:
+    if: inputs.action == 'deploy'
+    needs: approve
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.approve.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version-file: .node-version
+      - run: npm ci
+      - run: npm run check
+      - run: npx playwright install --with-deps chromium
+      - run: npm test
+  prepare:
+    needs: [approve, quality]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: preview-control
+    outputs:
+      environment: ${{ steps.prepare.outputs.environment }}
+      previous_sha: ${{ steps.prepare.outputs.previous_sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version-file: .node-version
+      # Dependencies come only from the pinned trusted main snapshot.
+      - run: npm ci --ignore-scripts
+      - id: prepare
+        run: node scripts/preview-control.mjs prepare
+        env:
+          GH_TOKEN: ${{ secrets.PREVIEW_ADMIN_TOKEN }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          PREVIEW_STATE_KEY: ${{ secrets.PREVIEW_STATE_KEY }}
+          PREVIEW_REFERENCE: ${{ secrets.PREVIEW_REFERENCE }}
+          NEON_AUTH_BASE_URL: ${{ secrets.NEON_AUTH_BASE_URL }}
+          NEON_AUTH_COOKIE_SECRET: ${{ secrets.NEON_AUTH_COOKIE_SECRET }}
+          OWNER_USER_ID: ${{ secrets.OWNER_USER_ID }}
+          OWNER_EMAIL: ${{ secrets.OWNER_EMAIL }}
+          PREVIEW_ACTION: ${{ inputs.action }}
+          PREVIEW_PR: ${{ inputs.pr }}
+          PREVIEW_SHA: ${{ inputs.sha }}
+  migrations:
+    needs: [approve, prepare]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ needs.prepare.outputs.environment }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          path: control
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.approve.outputs.sha }}
+          path: candidate
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.prepare.outputs.previous_sha }}
+          path: baseline
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version-file: control/.node-version
+      - run: npm ci --ignore-scripts
+        working-directory: control
+      - run: npx --prefix control playwright install --with-deps chromium
+      - run: node control/scripts/preview-execute.mjs
+        env:
+          PREVIEW_INPUT: ${{ secrets.PREVIEW_INPUT }}
+  deploy:
+    needs: [approve, prepare, migrations]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: preview-control
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          path: control
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.approve.outputs.sha }}
+          path: source
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version-file: control/.node-version
+      - run: npm ci --ignore-scripts
+        working-directory: control
+      - run: node control/scripts/preview-control.mjs deploy
+        env:
+          GH_TOKEN: ${{ secrets.PREVIEW_ADMIN_TOKEN }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          PREVIEW_STATE_KEY: ${{ secrets.PREVIEW_STATE_KEY }}
+          PREVIEW_REFERENCE: ${{ secrets.PREVIEW_REFERENCE }}
+          NEON_AUTH_BASE_URL: ${{ secrets.NEON_AUTH_BASE_URL }}
+          NEON_AUTH_COOKIE_SECRET: ${{ secrets.NEON_AUTH_COOKIE_SECRET }}
+          OWNER_USER_ID: ${{ secrets.OWNER_USER_ID }}
+          OWNER_EMAIL: ${{ secrets.OWNER_EMAIL }}
+          PREVIEW_ACTION: ${{ inputs.action }}
+          PREVIEW_PR: ${{ inputs.pr }}
+          PREVIEW_SHA: ${{ inputs.sha }}
+          PREVIEW_SOURCE: source
+          VERCEL_PROJECT_ID: prj_9mmJV4XIqdZyvhtpwh2amkiQS2k6
+          VERCEL_ORG_ID: team_J9VXW7YbzLRuOTDPUyQTpEUP
+  cleanup:
+    if: inputs.action == 'cleanup'
+    needs: approve
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: preview-control
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version-file: .node-version
+      - run: npm ci --ignore-scripts
+      - run: node scripts/preview-control.mjs cleanup
+        env:
+          GH_TOKEN: ${{ secrets.PREVIEW_ADMIN_TOKEN }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          PREVIEW_STATE_KEY: ${{ secrets.PREVIEW_STATE_KEY }}
+          PREVIEW_REFERENCE: ${{ secrets.PREVIEW_REFERENCE }}
+          NEON_AUTH_BASE_URL: ${{ secrets.NEON_AUTH_BASE_URL }}
+          NEON_AUTH_COOKIE_SECRET: ${{ secrets.NEON_AUTH_COOKIE_SECRET }}
+          OWNER_USER_ID: ${{ secrets.OWNER_USER_ID }}
+          OWNER_EMAIL: ${{ secrets.OWNER_EMAIL }}
+          PREVIEW_ACTION: ${{ inputs.action }}
+          PREVIEW_PR: ${{ inputs.pr }}
+          PREVIEW_SHA: ${{ inputs.sha }}

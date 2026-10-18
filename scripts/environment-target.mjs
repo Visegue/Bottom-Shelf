@@ -1,7 +1,27 @@
 import targets from "../config/environments.json" with { type: "json" };
 
 export function environmentTarget(env = process.env) {
-  const target = Object.hasOwn(targets, env.APP_ENV) && targets[env.APP_ENV];
+  let target = Object.hasOwn(targets, env.APP_ENV) && targets[env.APP_ENV];
+  if (env.APP_ENV === "preview") {
+    try {
+      target = JSON.parse(env.PREVIEW_TARGET);
+    } catch {
+      throw new Error("Invalid preview target registry");
+    }
+    if (
+      target.projectId !== targets.test.projectId ||
+      !/^br-[a-z0-9-]+$/.test(target.branchId) ||
+      Object.values(targets).some(
+        (protectedTarget) => protectedTarget.branchId === target.branchId,
+      ) ||
+      !["bs_preview", "bs_probe"].includes(target.database) ||
+      target.runtime !== "bs_preview_runtime" ||
+      target.migrator !== "bs_preview_migrator" ||
+      target.bucket !== "preview-images" ||
+      !/^nak_live_[a-zA-Z0-9]+$/.test(target.storageKeyId)
+    )
+      throw new Error("Invalid preview target registry");
+  }
   if (!target) throw new Error("Environment target is not provisioned");
   const region = "eu-central-1";
   return {

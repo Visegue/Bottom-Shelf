@@ -38,3 +38,10 @@ test("an unchanged applied prefix allows a new migration", () => {
     ),
   );
 });
+
+test("reference import requires every current migration to be applied", () => {
+  assert.throws(
+    () => validateHistory([{ name: "001.sql", checksum: "known" }], [], true),
+    /current schema/,
+  );
+});
