@@ -1,5 +1,7 @@
-import { readFile, stat } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import { Client } from "pg";
+import { createHash } from "node:crypto";
+import { validateHistory } from "./migration-history.mjs";
 import {
   S3Client,
   GetObjectCommand,
@@ -12,8 +14,8 @@ import {
 
 let database, storage;
 try {
-  if (process.env.APP_ENV !== "development")
-    throw new Error("Development target required");
+  if (!["development", "preview"].includes(process.env.APP_ENV))
+    throw new Error("Nonproduction target required");
   const file =
     process.env.REFERENCE_DATA_FILE ?? ".env.reference.local/reference.json";
   const info = await stat(file);
@@ -46,6 +48,23 @@ try {
   });
   await database.connect();
   await verifyDatabaseTarget(database, "runtime");
+  // Complete history validation precedes the first data or image write.
+  const files = [];
+  for (const name of (await readdir(new URL("../migrations/", import.meta.url)))
+    .filter((name) => name.endsWith(".sql"))
+    .sort()) {
+    const source = await readFile(
+      new URL(`../migrations/${name}`, import.meta.url),
+    );
+    files.push({
+      name,
+      checksum: createHash("sha256").update(source).digest("hex"),
+    });
+  }
+  const { rows: applied } = await database.query(
+    "SELECT name,checksum FROM schema_migrations ORDER BY name",
+  );
+  validateHistory(files, applied, true);
   const key = `reference/${encodeURIComponent(reference.ownerId)}/${reference.id}.png`;
   const checkOnly = process.argv.includes("--check");
   const values = [reference.id, reference.ownerId, reference.nonce, key];
@@ -100,7 +119,7 @@ try {
       values,
     );
   console.log(
-    "Saved reference verified in development; existing data and images preserved.",
+    "Saved nonproduction reference verified; existing data and images preserved.",
   );
 } catch (error) {
   console.error(

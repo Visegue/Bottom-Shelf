@@ -17,5 +17,16 @@
     "bootstrap": "neondb_owner",
     "bootstrapDatabase": "neondb",
     "storageKeyId": "nak_live_9694d877575849c2aa3c352ae5826d05"
+  },
+  "preview": {
+    "projectId": "blue-bar-96694914",
+    "branchId": "br-holy-bird-barhw055",
+    "database": "bs_preview",
+    "migrator": "bs_preview_migrator",
+    "runtime": "bs_preview_runtime",
+    "bucket": "preview-images",
+    "bootstrap": "neondb_owner",
+    "bootstrapDatabase": "neondb",
+    "storageKeyHash": "fbf250b3caa7e30b897ba2d772249fbf2d1ede24b280aca6b10e2de53a518d3a"
   }
 }

@@ -1,0 +1,7 @@
+# Use persistent shared preview data with an address per PR
+
+Use one fixed Neon preview branch and private image bucket, separate from development and the deployed test app. On 19 October 2026 the user chose shared persistent data over per-PR resources, then requested automatic deployments with an address per PR: CI needs only scoped database/storage credentials and a project-scoped Vercel token, with no Neon management API key, GitHub administration token or encrypted resource registry.
+
+This supersedes the per-PR data lifecycle in ADR 0002 and preview-discard rule in ADR 0003. Trusted main orchestration tests exact same-repository PR revisions in isolation, serializes migrations and assigns `bottom-shelf-pr-<number>.visegue.vercel.app` after smoke checks; closing a PR does not delete shared data or existing deployments. All PR versions share schema/data, so migrations must remain compatible with every active app; revisit per-PR data isolation when conflicts or usage justify its operating cost.
+
+Stable nonproduction Managed Neon Auth trusts `https://*.visegue.vercel.app`, Vercel's team-reserved namespace, because Neon only accepts a whole leftmost wildcard label. This extends Auth callback trust to that team's applications; team membership, slug and namespace ownership are part of the trust boundary. Do not trust all of `*.vercel.app` or a claimable project-name prefix. Revisit exact-domain management or an owned custom preview domain if team applications require separate Auth trust.

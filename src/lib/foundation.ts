@@ -22,7 +22,7 @@ const image = Buffer.from(
 
 export async function checkFoundation(ownerId: string) {
   if (
-    !["test", "development"].includes(process.env.APP_ENV ?? "") ||
+    !["test", "development", "preview"].includes(process.env.APP_ENV ?? "") ||
     process.env.FOUNDATION_CHECK_ENABLED !== "true"
   ) {
     throw new AppError("configuration", 503);

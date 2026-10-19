@@ -1,0 +1,84 @@
+name: PR preview
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, reopened, synchronize, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Reviewed same-repository PR number
+        type: string
+        required: true
+      sha:
+        description: Exact reviewed full PR head SHA
+        type: string
+        required: true
+permissions:
+  contents: read
+  pull-requests: read
+# All PR previews share one database. Queue every PR; never cancel migrations.
+concurrency:
+  group: bottom-shelf-shared-preview
+  cancel-in-progress: false
+  queue: max
+jobs:
+  preview:
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+      !github.event.pull_request.draft &&
+      github.event.pull_request.user.type != 'Bot'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment:
+      name: preview-control
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          path: control
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version-file: control/.node-version
+      - id: approve
+        run: node control/scripts/preview-control.mjs approve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIEW_PR: ${{ github.event.pull_request.number || inputs.pr }}
+          PREVIEW_SHA: ${{ github.event.pull_request.head.sha || inputs.sha }}
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ steps.approve.outputs.sha }}
+          path: candidate
+          persist-credentials: false
+      - run: node control/scripts/preview-sandbox.mjs quality
+      # This checkout never enters candidate execution or migrations.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ steps.approve.outputs.sha }}
+          path: source
+          persist-credentials: false
+      - run: npm ci --ignore-scripts
+        working-directory: control
+      - id: deploy
+        run: node control/scripts/preview-control.mjs deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIEW_PR: ${{ github.event.pull_request.number || inputs.pr }}
+          PREVIEW_SHA: ${{ github.event.pull_request.head.sha || inputs.sha }}
+          APP_ENV: preview
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_MIGRATION_URL: ${{ secrets.DATABASE_MIGRATION_URL }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_URL_S3: ${{ vars.AWS_ENDPOINT_URL_S3 }}
+          AWS_REGION: eu-central-1
+          STORAGE_BUCKET: preview-images
+          NEON_AUTH_BASE_URL: ${{ secrets.NEON_AUTH_BASE_URL }}
+          NEON_AUTH_COOKIE_SECRET: ${{ secrets.NEON_AUTH_COOKIE_SECRET }}
+          OWNER_USER_ID: ${{ secrets.OWNER_USER_ID }}
+          OWNER_EMAIL: ${{ secrets.OWNER_EMAIL }}

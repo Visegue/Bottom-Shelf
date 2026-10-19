@@ -1,7 +1,10 @@
+import { createHash } from "node:crypto";
 import targets from "../config/environments.json" with { type: "json" };
 
 export function environmentTarget(env = process.env) {
   const target = Object.hasOwn(targets, env.APP_ENV) && targets[env.APP_ENV];
+  if (env.APP_ENV === "preview" && env.PREVIEW_TARGET)
+    throw new Error("The fixed preview target cannot be overridden");
   if (!target) throw new Error("Environment target is not provisioned");
   const region = "eu-central-1";
   return {
@@ -51,7 +54,11 @@ export function verifyStorageTarget(env = process.env) {
     env.AWS_ENDPOINT_URL_S3 !== target.storageEndpoint ||
     env.AWS_REGION !== target.region ||
     env.STORAGE_BUCKET !== target.bucket ||
-    (target.storageKeyId && env.AWS_ACCESS_KEY_ID !== target.storageKeyId)
+    (target.storageKeyId && env.AWS_ACCESS_KEY_ID !== target.storageKeyId) ||
+    (target.storageKeyHash &&
+      createHash("sha256")
+        .update(env.AWS_ACCESS_KEY_ID ?? "")
+        .digest("hex") !== target.storageKeyHash)
   )
     throw new Error("Storage target verification failed");
   return target;
