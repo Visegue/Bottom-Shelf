@@ -30,13 +30,15 @@ async function savePrivate(file, env) {
       );
   }
 }
+const environment = process.env.APP_ENV;
+const credentialsFile = `.env.${environment}.credentials.local`;
 let client;
 try {
   if (
-    process.env.APP_ENV !== "development" ||
+    !["development", "preview"].includes(environment) ||
     !process.env.DATABASE_BOOTSTRAP_URL
   )
-    throw new Error("Development target configuration required");
+    throw new Error("Nonproduction target configuration required");
   const source = new URL(process.env.DATABASE_BOOTSTRAP_URL);
   if (
     source.hostname.includes("-pooler") ||
@@ -61,11 +63,9 @@ try {
     throw new Error("Existing database owner differs; nothing changed");
   let credentials;
   try {
-    if ((await stat(".env.development.credentials.local")).mode & 0o077)
+    if ((await stat(credentialsFile)).mode & 0o077)
       throw new Error("Private credential file permissions are too broad");
-    credentials = parseEnv(
-      await readFile(".env.development.credentials.local", "utf8"),
-    );
+    credentials = parseEnv(await readFile(credentialsFile, "utf8"));
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
     const { rows: existingRoles } = await client.query(
@@ -82,7 +82,7 @@ try {
       migrator: randomBytes(32).toString("hex"),
     };
     // Durable before CREATE ROLE: an interrupted run must never rotate a saved password.
-    await savePrivate(".env.development.credentials.local", credentials);
+    await savePrivate(credentialsFile, credentials);
   }
   for (const kind of ["migrator", "runtime"]) {
     const name = target[kind],
@@ -118,7 +118,7 @@ try {
     url.pathname = "/" + target.database;
     urls[kind] = url.toString();
   }
-  const runtime = { APP_ENV: "development", DATABASE_URL: urls.runtime };
+  const runtime = { APP_ENV: environment, DATABASE_URL: urls.runtime };
   for (const name of [
     "NEON_AUTH_BASE_URL",
     "NEON_AUTH_COOKIE_SECRET",
@@ -137,13 +137,13 @@ try {
     STORAGE_BUCKET: target.bucket,
     FOUNDATION_CHECK_ENABLED: "true",
   });
-  await savePrivate(".env.development.local", runtime);
-  await savePrivate(".env.development.admin.local", {
-    APP_ENV: "development",
+  await savePrivate(`.env.${environment}.local`, runtime);
+  await savePrivate(`.env.${environment}.admin.local`, {
+    APP_ENV: environment,
     DATABASE_MIGRATION_URL: urls.migrator,
   });
   console.log(
-    "Development roles and private configuration ready; run dev:migrate then dev:check. Existing data and credentials preserved.",
+    "Nonproduction roles and private configuration ready; migrate then verify SQL/storage. Existing data and credentials preserved.",
   );
 } catch (error) {
   console.error(
