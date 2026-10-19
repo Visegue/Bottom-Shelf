@@ -4,7 +4,9 @@ export async function smokeDeployment(rawUrl, fetchPage = fetch) {
   const url = new URL(rawUrl);
   if (
     url.protocol !== "https:" ||
-    !/^[a-z0-9-]+\.vercel\.app$/i.test(url.hostname) ||
+    !/^(?:[a-z0-9-]+\.vercel\.app|bottom-shelf-pr-[1-9][0-9]*\.visegue\.vercel\.app)$/i.test(
+      url.hostname,
+    ) ||
     url.pathname !== "/" ||
     url.search ||
     url.hash ||

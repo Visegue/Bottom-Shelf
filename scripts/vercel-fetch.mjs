@@ -6,7 +6,9 @@ export async function vercelFetch(input, init = {}) {
   const url = new URL(input);
   if (
     url.protocol !== "https:" ||
-    !/^[a-z0-9-]+\.vercel\.app$/i.test(url.hostname)
+    !/^(?:[a-z0-9-]+\.vercel\.app|bottom-shelf-pr-[1-9][0-9]*\.visegue\.vercel\.app)$/i.test(
+      url.hostname,
+    )
   )
     throw new Error("Invalid deployment destination");
   const args = [

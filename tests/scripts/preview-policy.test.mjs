@@ -1,6 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { approvePreview } from "../../scripts/preview-policy.mjs";
+import {
+  approvePreview,
+  previewRequest,
+  previewAlias,
+} from "../../scripts/preview-policy.mjs";
 const sha = "a".repeat(40);
 const request = {
   pr: 17,
@@ -33,4 +37,42 @@ test("preview accepts only the exact approved same-repository PR revision from p
     () => approvePreview({ ...request, actorPermission: "read" }, pr),
     /approved/,
   );
+});
+
+test("automatic previews bind the protected main event to the exact PR revision", () => {
+  const env = {
+    GITHUB_REPOSITORY: "Visegue/Bottom-Shelf",
+    GITHUB_REF: "refs/heads/main",
+    GITHUB_EVENT_NAME: "pull_request_target",
+    PREVIEW_PR: "17",
+    PREVIEW_SHA: sha,
+  };
+  const event = {
+    action: "synchronize",
+    pull_request: { number: 17, head: { sha } },
+  };
+  assert.equal(previewRequest(env, event).sha, sha);
+  for (const changed of [
+    { ...env, GITHUB_EVENT_NAME: "pull_request" },
+    { ...env, GITHUB_REF: "refs/pull/17/merge" },
+    { ...env, PREVIEW_PR: "18" },
+    { ...env, PREVIEW_SHA: "b".repeat(40) },
+  ])
+    assert.throws(() => previewRequest(changed, event));
+  assert.throws(() => previewRequest(env, { ...event, action: "closed" }));
+  assert.equal(
+    previewRequest({ ...env, GITHUB_EVENT_NAME: "workflow_dispatch" }, {}).pr,
+    17,
+  );
+  assert.throws(() => approvePreview(request, { ...pr, draft: true }));
+  assert.throws(() =>
+    approvePreview(request, { ...pr, user: { login: "service", type: "Bot" } }),
+  );
+});
+
+test("PR addresses are distinct and stay within the reserved team namespace", () => {
+  assert.equal(previewAlias(28), "bottom-shelf-pr-28.visegue.vercel.app");
+  assert.notEqual(previewAlias(28), previewAlias(29));
+  for (const bad of [0, -1, 1.5, "28", NaN, Infinity])
+    assert.throws(() => previewAlias(bad));
 });
