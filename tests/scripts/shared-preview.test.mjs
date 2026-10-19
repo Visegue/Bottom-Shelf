@@ -58,13 +58,16 @@ test("runtime configuration excludes management and migration credentials", asyn
   assert.equal(runtime.DATABASE_URL, "runtime");
 });
 
-test("deployment uses only project APIs and moves the shared alias after successful smoke and approval", async () => {
+test("deployment uses only project APIs and moves only its PR alias after successful smoke and approval", async () => {
   const { deployPreview } = await import("../../scripts/deploy-preview.mjs");
   const { vercelProject, vercelTeam, previewAlias } =
     await import("../../scripts/preview-policy.mjs");
   const sha = "a".repeat(40),
     events = [];
+  const aliasName = previewAlias(28);
   let created;
+  let foreignAlias = false,
+    wrongDomain = false;
   const options = {
     token: "scoped-token",
     pause: async () => {},
@@ -81,6 +84,12 @@ test("deployment uses only project APIs and moves the shared alias after success
           name: "bottom-shelf",
         });
       if (path.endsWith("/env")) return Response.json({ envs: [] });
+      if (path.includes("/domains"))
+        return Response.json({
+          projectId: wrongDomain ? "other-project" : vercelProject,
+          gitBranch: "feature/28",
+          verified: true,
+        });
       if (path === "/v13/deployments") {
         created = JSON.parse(init.body);
         assert.equal(created.target, undefined);
@@ -95,16 +104,16 @@ test("deployment uses only project APIs and moves the shared alias after success
         return Response.json({
           readyState: "READY",
           projectId: vercelProject,
-          meta: { approvedSHA: sha },
+          meta: { approvedSHA: sha, previewPR: "28" },
         });
       if (path.endsWith("/aliases")) {
         events.push("alias");
-        assert.equal(JSON.parse(init.body).alias, previewAlias);
-        return Response.json({ alias: previewAlias });
+        assert.equal(JSON.parse(init.body).alias, aliasName);
+        return Response.json({ alias: aliasName });
       }
       if (path.startsWith("/v4/aliases/"))
         return Response.json({
-          projectId: vercelProject,
+          projectId: foreignAlias ? "other-project" : vercelProject,
           deploymentId: "dpl_fixture",
         });
       throw new Error("Unexpected API path");
@@ -123,17 +132,30 @@ test("deployment uses only project APIs and moves the shared alias after success
   };
   assert.equal(
     await deployPreview(
-      { sha, files: [], runtime: { DATABASE_URL: "runtime-only" } },
+      {
+        pr: 28,
+        branch: "feature/28",
+        sha,
+        files: [],
+        runtime: { DATABASE_URL: "runtime-only" },
+      },
       options,
     ),
-    `https://${previewAlias}`,
+    `https://${aliasName}`,
   );
-  assert.deepEqual(events, ["smoke", "smoke", "approval", "alias"]);
+  assert.deepEqual(events, [
+    "smoke",
+    "smoke",
+    "approval",
+    "alias",
+    "smoke",
+    "smoke",
+  ]);
   assert.deepEqual(created.env, { DATABASE_URL: "runtime-only" });
   events.length = 0;
   await assert.rejects(
     deployPreview(
-      { sha, files: [], runtime: {} },
+      { pr: 28, branch: "feature/28", sha, files: [], runtime: {} },
       {
         ...options,
         fetchPage: async () => new Response("unavailable", { status: 503 }),
@@ -145,7 +167,7 @@ test("deployment uses only project APIs and moves the shared alias after success
   events.length = 0;
   await assert.rejects(
     deployPreview(
-      { sha, files: [], runtime: {} },
+      { pr: 28, branch: "feature/28", sha, files: [], runtime: {} },
       {
         ...options,
         verifyApproval: async () => {
@@ -156,6 +178,23 @@ test("deployment uses only project APIs and moves the shared alias after success
     /PR moved/,
   );
   assert.equal(events.includes("alias"), false);
+  for (const failure of ["alias", "domain"]) {
+    foreignAlias = failure === "alias";
+    wrongDomain = failure === "domain";
+    events.length = 0;
+    await assert.rejects(
+      deployPreview(
+        { pr: 28, branch: "feature/28", sha, files: [], runtime: {} },
+        options,
+      ),
+      /another project|expected project/,
+    );
+    assert.deepEqual(
+      events,
+      [],
+      "ownership failure must stop before smoke or promotion",
+    );
+  }
 });
 
 test("candidate Git replacements cannot change pristine deployment bytes", async () => {

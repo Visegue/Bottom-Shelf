@@ -1,23 +1,21 @@
 import { readApprovedSource } from "./preview-source.mjs";
-import { appendFile } from "node:fs/promises";
+import { readFile, appendFile } from "node:fs/promises";
 import {
   PreviewError,
   approvePreview,
   previewRuntime,
   repository,
+  previewRequest,
 } from "./preview-policy.mjs";
 import { verifyStorageTarget } from "./environment-target.mjs";
 import { previewSandbox } from "./preview-sandbox.mjs";
 import { deployPreview } from "./deploy-preview.mjs";
 
 async function approved() {
-  if (
-    process.env.GITHUB_REPOSITORY !== repository ||
-    process.env.GITHUB_REF !== "refs/heads/main"
-  )
-    throw new PreviewError(
-      "Dispatch preview from the repository's protected main",
-    );
+  const identity = previewRequest(
+    process.env,
+    JSON.parse(await readFile(process.env.GITHUB_EVENT_PATH, "utf8")),
+  );
   const get = async (path) => {
     const response = await fetch(
       `https://api.github.com/repos/${repository}/${path}`,
@@ -31,20 +29,18 @@ async function approved() {
     return response.json();
   };
   const [pull, actor, main] = await Promise.all([
-    get(`pulls/${process.env.PREVIEW_PR}`),
+    get(`pulls/${identity.pr}`),
     get(
-      `collaborators/${encodeURIComponent(process.env.GITHUB_ACTOR)}/permission`,
+      `collaborators/${encodeURIComponent(process.env.GITHUB_TRIGGERING_ACTOR || process.env.GITHUB_ACTOR)}/permission`,
     ),
     get("git/ref/heads/main"),
   ]);
   if (main.object.sha !== process.env.GITHUB_SHA)
-    throw new PreviewError("Main moved; dispatch again");
+    throw new PreviewError("Main moved; rerun preview from current main");
   return approvePreview(
     {
-      pr: Number(process.env.PREVIEW_PR),
-      sha: process.env.PREVIEW_SHA,
+      ...identity,
       actorPermission: actor.permission,
-      ref: process.env.GITHUB_REF,
     },
     pull,
   );
@@ -75,11 +71,11 @@ try {
       );
     const files = readApprovedSource(request.sha);
     const url = await deployPreview(
-      { sha: request.sha, files, runtime },
+      { ...request, files, runtime },
       { token: process.env.VERCEL_TOKEN, verifyApproval: approved },
     );
     console.log(
-      `Shared preview smoke passed: ${url} (${request.sha}). Real Google/session verification remains separate.`,
+      `PR preview smoke passed: ${url} (${request.sha}). Real Google/session verification remains separate.`,
     );
     if (process.env.GITHUB_OUTPUT)
       await appendFile(process.env.GITHUB_OUTPUT, `url=${url}\n`);

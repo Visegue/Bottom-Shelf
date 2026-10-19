@@ -9,7 +9,7 @@ import { vercelFetch } from "./vercel-fetch.mjs";
 
 // Source files and runtime values are supplied by trusted main, never executed here.
 export async function deployPreview(
-  { sha, files, runtime },
+  { pr, branch, sha, files, runtime },
   {
     token,
     fetchApi = fetch,
@@ -18,7 +18,7 @@ export async function deployPreview(
     verifyApproval = async () => {},
   } = {},
 ) {
-  if (!token || !/^[a-f0-9]{40}$/.test(sha))
+  if (!token || !branch || !/^[a-f0-9]{40}$/.test(sha))
     throw new PreviewError(
       "Approved preview revision and project token required",
     );
@@ -42,6 +42,7 @@ export async function deployPreview(
       );
     return response.json();
   }
+  const aliasName = previewAlias(pr);
   const project = await api(`/v9/projects/${vercelProject}`);
   const variables = await api(`/v10/projects/${vercelProject}/env`);
   if (
@@ -53,20 +54,34 @@ export async function deployPreview(
     throw new PreviewError(
       "Preview requires the pinned project and no inherited Preview variables",
     );
-  const previousAlias = await api(
-    `/v4/aliases/${previewAlias}`,
+  const previousAlias = await api(`/v4/aliases/${aliasName}`, undefined, true);
+  if (previousAlias && previousAlias.projectId !== vercelProject)
+    throw new PreviewError("PR preview address belongs to another project");
+  let domain = await api(
+    `/v9/projects/${vercelProject}/domains/${aliasName}`,
     undefined,
     true,
   );
-  if (previousAlias && previousAlias.projectId !== vercelProject)
-    throw new PreviewError("Shared preview address belongs to another project");
+  if (!domain)
+    domain = await api(`/v10/projects/${vercelProject}/domains`, {
+      name: aliasName,
+      gitBranch: branch,
+    });
+  if (
+    domain.projectId !== vercelProject ||
+    domain.gitBranch !== branch ||
+    !domain.verified
+  )
+    throw new PreviewError(
+      "PR domain is not assigned to the expected project and branch",
+    );
   const created = await api("/v13/deployments", {
     name: project.name,
     project: vercelProject,
     files,
     env: runtime,
     build: { env: runtime },
-    meta: { approvedSHA: sha },
+    meta: { approvedSHA: sha, previewPR: String(pr) },
     projectSettings: {
       framework: "nextjs",
       installCommand: "npm ci",
@@ -89,7 +104,8 @@ export async function deployPreview(
     if (
       ready.projectId !== vercelProject ||
       ready.target != null ||
-      ready.meta?.approvedSHA !== sha
+      ready.meta?.approvedSHA !== sha ||
+      ready.meta?.previewPR !== String(pr)
     )
       throw new PreviewError("Preview deployment identity changed");
     if (ready.readyState === "READY") break;
@@ -101,9 +117,19 @@ export async function deployPreview(
     throw new PreviewError("Preview build timed out; stable address unchanged");
   await smokeDeployment(`https://${created.url}`, fetchPage);
   await verifyApproval();
-  await api(`/v2/deployments/${created.id}/aliases`, { alias: previewAlias });
-  const alias = await api(`/v4/aliases/${previewAlias}`);
+  await api(`/v2/deployments/${created.id}/aliases`, { alias: aliasName });
+  const alias = await api(`/v4/aliases/${aliasName}`);
   if (alias.projectId !== vercelProject || alias.deploymentId !== created.id)
-    throw new PreviewError("Stable preview address was not verified");
-  return `https://${previewAlias}`;
+    throw new PreviewError("PR preview address was not verified");
+  // A newly assigned team subdomain may need a short certificate propagation delay.
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await smokeDeployment(`https://${aliasName}`, fetchPage);
+      break;
+    } catch (error) {
+      if (attempt >= 11) throw error;
+      await pause(5000);
+    }
+  }
+  return `https://${aliasName}`;
 }
