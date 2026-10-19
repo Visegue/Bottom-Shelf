@@ -25,31 +25,26 @@ export function approvePreview(request, pr) {
     );
   return { pr: request.pr, sha: request.sha };
 }
-export function requirePreviewCapacity(
-  { neonPlan, branchLimit, branches, vercelPlan, vercelDaily, vercelActive },
-  needed = 1,
-) {
-  if (neonPlan !== "free_v3" || vercelPlan !== "hobby")
-    throw new PreviewError(
-      "Free plans must be verified; no automatic paid provisioning",
-    );
-  if (
-    !Number.isInteger(vercelDaily) ||
-    vercelDaily < 0 ||
-    vercelDaily >= 100 ||
-    vercelActive !== 0
-  )
-    throw new PreviewError(
-      "Vercel free preview capacity exhausted or unknown; wait and retry",
-    );
-  if (
-    !Number.isInteger(branchLimit) ||
-    branchLimit > 10 ||
-    !Number.isInteger(branches) ||
-    branches < 0 ||
-    branches + needed > branchLimit
-  )
-    throw new PreviewError(
-      "Preview capacity exhausted or unknown; wait for explicit cleanup",
-    );
+export const previewAlias = "bottom-shelf-preview.vercel.app";
+export function previewRuntime(env) {
+  if (env.APP_ENV !== "preview")
+    throw new PreviewError("Fixed preview configuration required");
+  const runtime = { APP_ENV: "preview", FOUNDATION_CHECK_ENABLED: "true" };
+  for (const key of [
+    "DATABASE_URL",
+    "NEON_AUTH_BASE_URL",
+    "NEON_AUTH_COOKIE_SECRET",
+    "OWNER_USER_ID",
+    "OWNER_EMAIL",
+    "AWS_ENDPOINT_URL_S3",
+    "AWS_REGION",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "STORAGE_BUCKET",
+  ]) {
+    if (!env[key])
+      throw new PreviewError(`Missing preview configuration: ${key}`);
+    runtime[key] = env[key];
+  }
+  return runtime;
 }

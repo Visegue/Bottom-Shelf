@@ -47,7 +47,6 @@ export function previewSandbox(
   mount("candidate");
   if (mode === "migrations") {
     if (!env.PREVIEW_INPUT) throw new Error("Scoped preview input required");
-    mount("baseline");
     mount("control", true);
     clientEnv.PREVIEW_INPUT = env.PREVIEW_INPUT;
     args.push("--env", "PREVIEW_INPUT");
