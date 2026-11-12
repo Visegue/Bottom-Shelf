@@ -45,8 +45,22 @@ Migration/deployment were skipped and the trusted final reporter published
 exact-head `failure`. That PR closed without merging the fixture.
 
 The final cross-PR provider check snapshots all other registered PR alias
-deployment IDs before/after publication. It needs one protected-main run after
-that additional guard is merged; record its verified alias count in #18.
+deployment IDs before/after publication. [PR #38](https://github.com/Visegue/Bottom-Shelf/pull/38)
+merged it as `95ffbcc58a181a58ab5069f71ef041c716245220` after
+[CI 43245411235](https://github.com/Visegue/Bottom-Shelf/actions/runs/43245411235)
+and [preview 43245402797](https://github.com/Visegue/Bottom-Shelf/actions/runs/43245402797)
+passed exact head `1ca7fae5d095198402a8acab4fbef496a39a1f22`. The guard's
+regression cases prove stable pointers pass, changed pointers fail with recovery
+of only this run's own alias, and incomplete listing stops before deployment.
+There are now 44 passing script tests. A follow-up documentation PR exercises
+the guard from this protected-main revision; its actual run and verified alias
+count are recorded in #18 after completion.
+
+The provider read uses the documented, project-scoped
+[Vercel project-domains endpoint](https://vercel.com/docs/rest-api/projects/retrieve-project-domains-by-project-by-id-or-name),
+whose request limit is 100. It does not require a new management credential or
+modify another PR's alias. The existing real S3/SQL and protected alias smoke
+checks still run before any exact-head success is reported.
 
 ## Compatibility and failure evidence
 
