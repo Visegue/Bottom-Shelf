@@ -7,3 +7,6 @@ data changes are required.
 Record actual PR/run/SHA identities after the queue and stale-head exercise.
 Earlier queued revisions must fail approval after the head advances; the latest
 revision must deploy without moving another PR's alias.
+
+Queue exercise revision two: this head is deliberately superseded before its
+queued preview may publish an alias.
