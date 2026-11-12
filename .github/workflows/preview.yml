@@ -23,6 +23,10 @@ concurrency:
   queue: max
 jobs:
   preview:
+    permissions:
+      contents: read
+      pull-requests: read
+      statuses: write
     if: >-
       github.ref == 'refs/heads/main' &&
       (github.event_name == 'workflow_dispatch' ||
@@ -45,6 +49,12 @@ jobs:
           node-version-file: control/.node-version
       - id: approve
         run: node control/scripts/preview-control.mjs approve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIEW_PR: ${{ github.event.pull_request.number || inputs.pr }}
+          PREVIEW_SHA: ${{ github.event.pull_request.head.sha || inputs.sha }}
+      - name: Mark exact PR head pending
+        run: node control/scripts/preview-status.mjs pending
         env:
           GH_TOKEN: ${{ github.token }}
           PREVIEW_PR: ${{ github.event.pull_request.number || inputs.pr }}
@@ -82,3 +92,13 @@ jobs:
           NEON_AUTH_COOKIE_SECRET: ${{ secrets.NEON_AUTH_COOKIE_SECRET }}
           OWNER_USER_ID: ${{ secrets.OWNER_USER_ID }}
           OWNER_EMAIL: ${{ secrets.OWNER_EMAIL }}
+      - name: Report exact PR head result
+        if: always() && steps.approve.outcome == 'success'
+        run: node control/scripts/preview-status.mjs complete
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIEW_PR: ${{ github.event.pull_request.number || inputs.pr }}
+          PREVIEW_SHA: ${{ github.event.pull_request.head.sha || inputs.sha }}
+          PREVIEW_RESULT: ${{ steps.deploy.outcome }}
+          PREVIEW_JOB_STATUS: ${{ job.status }}
+          PREVIEW_URL: ${{ steps.deploy.outputs.url }}

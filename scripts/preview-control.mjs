@@ -1,50 +1,10 @@
 import { readApprovedSource } from "./preview-source.mjs";
-import { readFile, appendFile } from "node:fs/promises";
-import {
-  PreviewError,
-  approvePreview,
-  previewRuntime,
-  repository,
-  previewRequest,
-} from "./preview-policy.mjs";
+import { appendFile } from "node:fs/promises";
+import { PreviewError, previewRuntime } from "./preview-policy.mjs";
+import { approvedPreview as approved } from "./preview-approval.mjs";
 import { verifyStorageTarget } from "./environment-target.mjs";
 import { previewSandbox } from "./preview-sandbox.mjs";
 import { deployPreview } from "./deploy-preview.mjs";
-
-async function approved() {
-  const identity = previewRequest(
-    process.env,
-    JSON.parse(await readFile(process.env.GITHUB_EVENT_PATH, "utf8")),
-  );
-  const get = async (path) => {
-    const response = await fetch(
-      `https://api.github.com/repos/${repository}/${path}`,
-      {
-        headers: { Authorization: `Bearer ${process.env.GH_TOKEN}` },
-        signal: AbortSignal.timeout(20000),
-      },
-    );
-    if (!response.ok)
-      throw new PreviewError("Cannot verify approved PR identity");
-    return response.json();
-  };
-  const [pull, actor, main] = await Promise.all([
-    get(`pulls/${identity.pr}`),
-    get(
-      `collaborators/${encodeURIComponent(process.env.GITHUB_TRIGGERING_ACTOR || process.env.GITHUB_ACTOR)}/permission`,
-    ),
-    get("git/ref/heads/main"),
-  ]);
-  if (main.object.sha !== process.env.GITHUB_SHA)
-    throw new PreviewError("Main moved; rerun preview from current main");
-  return approvePreview(
-    {
-      ...identity,
-      actorPermission: actor.permission,
-    },
-    pull,
-  );
-}
 
 try {
   const request = await approved();

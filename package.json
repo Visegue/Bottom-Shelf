@@ -21,6 +21,7 @@
     "format:check": "prettier --check .",
     "build:check": "node scripts/build-check.mjs",
     "test:scripts": "node --test tests/scripts/*.test.mjs",
+    "test:migrations": "node scripts/check-migration-compatibility.mjs",
     "db:check": "node --env-file-if-exists=.env.local scripts/check-database.mjs",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm run test:scripts && npm run build:check",
     "deploy:smoke": "node scripts/smoke-deployment.mjs",

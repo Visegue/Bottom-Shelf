@@ -44,10 +44,37 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 7
+  migration-compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17.6-bookworm@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3
+        env:
+          POSTGRES_PASSWORD: synthetic-ci-only
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - run: npm run test:migrations
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:synthetic-ci-only@127.0.0.1:5432/postgres
   deploy-test:
     name: Deploy isolated test app
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [quality, end-to-end]
+    needs: [quality, end-to-end, migration-compatibility]
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment: test
