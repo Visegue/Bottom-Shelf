@@ -22,11 +22,11 @@ export async function deployPreview(
     throw new PreviewError(
       "Approved preview revision and project token required",
     );
-  async function api(path, body, allowMissing = false) {
+  async function api(path, body, allowMissing = false, method) {
     const url = new URL("https://api.vercel.com" + path);
     url.searchParams.set("teamId", vercelTeam);
     const response = await fetchApi(url, {
-      method: body === undefined ? "GET" : "POST",
+      method: method ?? (body === undefined ? "GET" : "POST"),
       redirect: "error",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -36,6 +36,7 @@ export async function deployPreview(
       signal: AbortSignal.timeout(30000),
     });
     if (allowMissing && response.status === 404) return null;
+    if (allowMissing && response.status === 204) return null;
     if (!response.ok)
       throw new PreviewError(
         `Vercel preview request failed (${response.status}); existing preview data preserved`,
@@ -117,19 +118,58 @@ export async function deployPreview(
     throw new PreviewError("Preview build timed out; stable address unchanged");
   await smokeDeployment(`https://${created.url}`, fetchPage);
   await verifyApproval();
-  await api(`/v2/deployments/${created.id}/aliases`, { alias: aliasName });
-  const alias = await api(`/v4/aliases/${aliasName}`);
-  if (alias.projectId !== vercelProject || alias.deploymentId !== created.id)
-    throw new PreviewError("PR preview address was not verified");
-  // A newly assigned team subdomain may need a short certificate propagation delay.
-  for (let attempt = 0; ; attempt++) {
-    try {
-      await smokeDeployment(`https://${aliasName}`, fetchPage);
-      break;
-    } catch (error) {
-      if (attempt >= 11) throw error;
-      await pause(5000);
+  try {
+    await api(`/v2/deployments/${created.id}/aliases`, { alias: aliasName });
+    const alias = await api(`/v4/aliases/${aliasName}`);
+    if (alias.projectId !== vercelProject || alias.deploymentId !== created.id)
+      throw new PreviewError("PR preview address was not verified");
+    // A new team subdomain may need a short certificate propagation delay.
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await smokeDeployment(`https://${aliasName}`, fetchPage);
+        break;
+      } catch (error) {
+        if (attempt >= 11) throw error;
+        await pause(5000);
+      }
     }
+  } catch (error) {
+    // Only undo our own alias assignment. Schema/data changes remain applied.
+    try {
+      const current = await api(`/v4/aliases/${aliasName}`, undefined, true);
+      if (
+        current?.projectId === vercelProject &&
+        current.deploymentId === created.id
+      ) {
+        if (previousAlias?.deploymentId) {
+          await api(`/v2/deployments/${previousAlias.deploymentId}/aliases`, {
+            alias: aliasName,
+          });
+          const restored = await api(`/v4/aliases/${aliasName}`);
+          if (
+            restored.projectId !== vercelProject ||
+            restored.deploymentId !== previousAlias.deploymentId
+          )
+            throw new Error("Alias restoration was not confirmed", {
+              cause: error,
+            });
+        } else {
+          await api(`/v2/aliases/${aliasName}`, undefined, true, "DELETE");
+          if (await api(`/v4/aliases/${aliasName}`, undefined, true))
+            throw new Error("Failed first alias still exists", {
+              cause: error,
+            });
+        }
+      } else if (current && current.projectId !== vercelProject) {
+        throw new Error("Alias ownership changed", { cause: error });
+      }
+    } catch (recoveryError) {
+      throw new PreviewError(
+        "PR alias recovery could not be verified; inspect the alias manually. Database migrations remain applied.",
+        { cause: recoveryError },
+      );
+    }
+    throw error;
   }
   return `https://${aliasName}`;
 }
