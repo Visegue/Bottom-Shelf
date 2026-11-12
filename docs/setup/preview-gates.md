@@ -67,3 +67,10 @@ Regression tests inject 402/429, failed builds, alias smoke failure and failed
 recovery through the real deploy orchestrator. They do not exhaust paid/live
 provider quotas. The local SQL test also proves transaction rollback on a failing
 pending migration and that previous app code still operates afterward.
+
+The controller additionally reads the project's registered domains and snapshots
+all other PR aliases before deployment. It verifies their project/deployment IDs
+after this PR's alias smoke and logs how many stayed unchanged. An unexpected
+change fails the run and restores only its own alias; it never rewrites another
+PR's address. More than 100 registered domains fails with a capacity-review error
+instead of silently omitting aliases or requesting broader credentials.

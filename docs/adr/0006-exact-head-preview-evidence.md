@@ -48,3 +48,11 @@ after publication, restore the previous deployment, or remove only the failed
 first alias; verify recovery and report an explicit manual-recovery error if it
 cannot be confirmed. This is failed-publication recovery, not PR-close cleanup.
 Database migrations are never reversed by an app/alias rollback.
+
+Before deployment, snapshot every other registered PR alias in this project's
+domain list; after publication and smoke, verify its project/deployment ID is
+unchanged. This provides provider evidence for the shared queue's cross-PR
+address boundary. A mismatch fails the run and recovers only this run's own
+alias, never another PR's. Incomplete domain listing (more than 100 domains)
+fails closed pending an explicit capacity/design review; no broader token or
+automatic cleanup/upgrade is introduced.
