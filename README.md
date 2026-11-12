@@ -21,6 +21,7 @@ Configure server-only variables using `.env.example`. Without configuration, the
 npm run verify            # format, lint, types, script tests, synthetic build, browser tests
 npm test                  # isolated external Auth fixture; no database needed
 npm run test:services     # real isolated Neon database + storage; Auth fixture
+npm run test:migrations   # disposable local Postgres; requires TEST_DATABASE_URL
 npm run build
 ```
 
@@ -31,3 +32,5 @@ The app exposes Google sign-in, sign-out, and an owner-only connection check. Th
 [Setup, exact remaining steps and verification evidence](docs/setup/foundation.md).
 
 [CI/CD, GitHub settings, secrets and deployment runbook](docs/setup/delivery.md).
+
+[Preview commit evidence, migration compatibility and recovery](docs/setup/preview-gates.md).

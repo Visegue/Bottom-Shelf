@@ -18,8 +18,8 @@ export function approvePreview(request, pr) {
     pr.head.repo?.full_name !== repository ||
     pr.base.repo?.full_name !== repository ||
     pr.base.ref !== "main" ||
-    pr.user.type === "Bot" ||
-    pr.user.login.endsWith("[bot]")
+    ((pr.user.type === "Bot" || pr.user.login.endsWith("[bot]")) &&
+      request.event !== "workflow_dispatch")
   )
     throw new PreviewError(
       "Preview requires an exact approved same-repository PR revision on main",
@@ -44,6 +44,7 @@ export function previewRequest(env, event) {
     pr: Number(env.PREVIEW_PR),
     sha: env.PREVIEW_SHA,
     ref: env.GITHUB_REF,
+    event: env.GITHUB_EVENT_NAME,
   };
   if (
     env.GITHUB_EVENT_NAME === "pull_request_target" &&
