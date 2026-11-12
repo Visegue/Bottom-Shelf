@@ -58,6 +58,31 @@ export async function deployPreview(
   const previousAlias = await api(`/v4/aliases/${aliasName}`, undefined, true);
   if (previousAlias && previousAlias.projectId !== vercelProject)
     throw new PreviewError("PR preview address belongs to another project");
+  const domains = await api(`/v9/projects/${vercelProject}/domains?limit=100`);
+  if (!Array.isArray(domains.domains) || domains.pagination?.next)
+    throw new PreviewError(
+      "Cannot audit all PR aliases within the approved preview capacity",
+    );
+  const otherAliases = [];
+  for (const domain of domains.domains) {
+    if (
+      domain.name === aliasName ||
+      !/^bottom-shelf-pr-[1-9][0-9]*\.visegue\.vercel\.app$/.test(domain.name)
+    )
+      continue;
+    const existing = await api(`/v4/aliases/${domain.name}`, undefined, true);
+    if (
+      existing &&
+      (existing.projectId !== vercelProject || !existing.deploymentId)
+    )
+      throw new PreviewError(
+        "Another PR alias has an unexpected project/deployment identity",
+      );
+    otherAliases.push({
+      name: domain.name,
+      deploymentId: existing?.deploymentId ?? null,
+    });
+  }
   let domain = await api(
     `/v9/projects/${vercelProject}/domains/${aliasName}`,
     undefined,
@@ -133,6 +158,23 @@ export async function deployPreview(
         await pause(5000);
       }
     }
+    for (const previous of otherAliases) {
+      const current = await api(
+        `/v4/aliases/${previous.name}`,
+        undefined,
+        true,
+      );
+      if (
+        (current?.deploymentId ?? null) !== previous.deploymentId ||
+        (current && current.projectId !== vercelProject)
+      )
+        throw new PreviewError(
+          "Another PR alias changed during publication; shared data preserved",
+        );
+    }
+    console.log(
+      `Verified ${otherAliases.length} other PR preview aliases unchanged.`,
+    );
   } catch (error) {
     // Only undo our own alias assignment. Schema/data changes remain applied.
     try {

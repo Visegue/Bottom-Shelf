@@ -84,6 +84,8 @@ test("deployment uses only project APIs and moves only its PR alias after succes
           name: "bottom-shelf",
         });
       if (path.endsWith("/env")) return Response.json({ envs: [] });
+      if (path === `/v9/projects/${vercelProject}/domains`)
+        return Response.json({ domains: [{ name: previewAlias(29) }] });
       if (path.includes("/domains"))
         return Response.json({
           projectId: wrongDomain ? "other-project" : vercelProject,

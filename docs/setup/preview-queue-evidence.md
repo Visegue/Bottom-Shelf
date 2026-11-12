@@ -24,11 +24,29 @@ while #37 ran. No running migration was cancelled.
 | #38 `f83ba8bfe451d734fb47a14abec3e241279b91f8` | [43239977706](https://github.com/Visegue/Bottom-Shelf/actions/runs/43239977706) | Superseded; stopped at approval, no candidate execution or deployment |
 | #38 `7a51efe258616126b1bbf46209f0893d7c06ceaf` | [43240015720](https://github.com/Visegue/Bottom-Shelf/actions/runs/43240015720) | Superseded; stopped at approval, no candidate execution or deployment |
 
-The third #38 head is `bd6278f6c0fd27a0ad66a33b4fcd19ed96745673`.
+The third #38 head was `bd6278f6c0fd27a0ad66a33b4fcd19ed96745673`.
 [Run 43240090613](https://github.com/Visegue/Bottom-Shelf/actions/runs/43240090613)
 first failed closed during a GitHub metadata read. A controlled retry on the
-unchanged head passed approval and isolated candidate checks. Final publication
-and new-reporter evidence are recorded after the run finishes.
+unchanged head passed all checks and published its own PR-38 alias.
+
+After PR #37 merged as `c1a4a8cd03632d4c873a32938db7d7942b86693b`,
+#38 head `fe11686568898e09ae79be6a1d4eca7e979f87ad` exercised the new reporter in
+[run 43242606753](https://github.com/Visegue/Bottom-Shelf/actions/runs/43242606753).
+An initial attempt failed closed on GitHub HTTP 503 at final reapproval and
+published exact-head `failure`. The unchanged-head retry passed all preview
+checks and published `success` on that same PR head. Raw GitHub statuses show
+pending → failure → pending → success from `github-actions[bot]`, linking to the
+actual run. The main control commit has no `Preview / verified` status.
+
+[PR #39](https://github.com/Visegue/Bottom-Shelf/pull/39), head
+`9c72b06ff68fc4b39eb91ca6c663f73bad21454d`, intentionally failed formatting in
+[run 43242942738](https://github.com/Visegue/Bottom-Shelf/actions/runs/43242942738).
+Migration/deployment were skipped and the trusted final reporter published
+exact-head `failure`. That PR closed without merging the fixture.
+
+The final cross-PR provider check snapshots all other registered PR alias
+deployment IDs before/after publication. It needs one protected-main run after
+that additional guard is merged; record its verified alias count in #18.
 
 ## Compatibility and failure evidence
 

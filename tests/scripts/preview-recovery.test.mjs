@@ -20,9 +20,12 @@ function fixture({
   failAliasSmoke = false,
   previous = true,
   failRecovery = false,
+  otherMoves = false,
+  incompleteDomains = false,
 } = {}) {
   const alias = previewAlias(request.pr);
   let deployment = previous ? "dpl_previous" : null;
+  let otherDeployment = "dpl_other";
   const writes = [];
   return {
     writes,
@@ -38,6 +41,11 @@ function fixture({
             name: "bottom-shelf",
           });
         if (path.endsWith("/env")) return Response.json({ envs: [] });
+        if (path === `/v9/projects/${vercelProject}/domains`)
+          return Response.json({
+            domains: [{ name: previewAlias(37) }],
+            pagination: { next: incompleteDomains ? 123 : null },
+          });
         if (path.includes("/domains/"))
           return Response.json({
             projectId: vercelProject,
@@ -67,12 +75,18 @@ function fixture({
                 deploymentId: deployment,
               })
             : new Response("missing", { status: 404 });
+        if (path === `/v4/aliases/${previewAlias(37)}`)
+          return Response.json({
+            projectId: vercelProject,
+            deploymentId: otherDeployment,
+          });
         if (path.endsWith("/aliases")) {
           assert.equal(JSON.parse(init.body).alias, alias);
           const id = path.split("/")[3];
           if (id === "dpl_previous" && failRecovery)
             return new Response("private", { status: 503 });
           deployment = id;
+          if (otherMoves && id === "dpl_new") otherDeployment = "dpl_changed";
           writes.push(id);
           return Response.json({ alias });
         }
@@ -128,4 +142,25 @@ test("failed first publication removes only its own new alias and reports failed
     deployPreview(request, failed.options),
     /recovery could not be verified/,
   );
+});
+
+test("publication audits other PR deployment IDs and recovers its own alias if another changes", async () => {
+  const incomplete = fixture({ incompleteDomains: true });
+  await assert.rejects(
+    deployPreview(request, incomplete.options),
+    /audit all PR aliases/,
+  );
+  assert.deepEqual(incomplete.writes, []);
+  const stable = fixture();
+  assert.match(
+    await deployPreview(request, stable.options),
+    /bottom-shelf-pr-36/,
+  );
+  assert.deepEqual(stable.writes, ["create", "dpl_new"]);
+  const changed = fixture({ otherMoves: true });
+  await assert.rejects(
+    deployPreview(request, changed.options),
+    /Another PR alias changed/,
+  );
+  assert.deepEqual(changed.writes, ["create", "dpl_new", "dpl_previous"]);
 });
