@@ -10,3 +10,6 @@ revision must deploy without moving another PR's alias.
 
 Queue exercise revision two: this head is deliberately superseded before its
 queued preview may publish an alias.
+
+Queue exercise revision three: this is the current candidate for publication;
+the two preceding queued revisions must stop before deployment.
